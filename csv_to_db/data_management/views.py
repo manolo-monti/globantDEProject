@@ -6,7 +6,8 @@ from .models import Department, Job, Employee
 from .serializers import DepartmentSerializer, JobSerializer, EmployeeSerializer
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import status, viewsets
+import pandas as pd
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.all()
@@ -45,3 +46,32 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
         Employee.objects.bulk_create(employees)
         return Response({"status": "Batch insert successful"}, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'])
+    def hires_by_quarter(self, request):
+        queryset = Employee.objects.filter(datetime__year=2021)
+        df = pd.DataFrame(queryset.values('department__department', 'job__job', 'datetime'))
+        df['quarter'] = df['datetime'].dt.quarter
+
+        # Group by department, job, and quarter, count employees
+        result = df.groupby(['department__department', 'job__job', 'quarter']).size().unstack(fill_value=0)
+        result.columns = ['q1', 'q2', 'q3', 'q4']
+        result = result.reset_index().sort_values(['department__department', 'job__job'])
+
+        return Response(result.to_dict('records'))
+    
+    @action(detail=False, methods=['get'])
+    def above_mean_hires(self, request):
+        employees = Employee.objects.filter(datetime__year=2021)
+        df = pd.DataFrame(list(employees.values('department__id', 'department__department', 'name')))
+        
+        # Count employees by department
+        hires_per_department = df.groupby(['department__id', 'department__department']).size().reset_index(name='hires')
+
+        # Mean of count employees by department
+        mean_hires = hires_per_department['hires'].mean()
+        
+        # Departments with count of employees over mean
+        result = hires_per_department[hires_per_department['hires'] > mean_hires].sort_values(by='hires', ascending=False)
+
+        return Response(result.to_dict(orient='records'))
