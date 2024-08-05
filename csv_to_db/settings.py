@@ -83,6 +83,9 @@ DATABASES = {
         'PASSWORD': 'globant',
         'HOST': 'localhost',
         'PORT': '3306',
+        'TEST': {
+            'NAME': 'test_globant_de',
+        },
     }
 }
 

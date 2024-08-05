@@ -49,13 +49,17 @@ class EmployeeViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def hires_by_quarter(self, request):
-        queryset = Employee.objects.filter(datetime__year=2021)
-        df = pd.DataFrame(queryset.values('department__department', 'job__job', 'datetime'))
+        employees = Employee.objects.filter(datetime__year=2021)
+        df = pd.DataFrame(employees.values('department__department', 'job__job', 'datetime'))
         df['quarter'] = df['datetime'].dt.quarter
-
-        # Group by department, job, and quarter, count employees
+        
+        # Group by department, job, and quarter, count employees if no data default = 0
         result = df.groupby(['department__department', 'job__job', 'quarter']).size().unstack(fill_value=0)
+        
+        # columns name change from 1 to 4, to q1 to q4
         result.columns = ['q1', 'q2', 'q3', 'q4']
+
+        # Order by department, job
         result = result.reset_index().sort_values(['department__department', 'job__job'])
 
         return Response(result.to_dict('records'))
@@ -67,11 +71,11 @@ class EmployeeViewSet(viewsets.ModelViewSet):
         
         # Count employees by department
         hires_per_department = df.groupby(['department__id', 'department__department']).size().reset_index(name='hires')
-
+        
         # Mean of count employees by department
         mean_hires = hires_per_department['hires'].mean()
         
-        # Departments with count of employees over mean
+        # Departments with count of employees over mean ordered by count of employees desc
         result = hires_per_department[hires_per_department['hires'] > mean_hires].sort_values(by='hires', ascending=False)
 
         return Response(result.to_dict(orient='records'))
